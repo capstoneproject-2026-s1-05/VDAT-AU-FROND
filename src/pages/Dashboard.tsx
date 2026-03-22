@@ -41,7 +41,6 @@ import { toast } from 'sonner';
 const positions = ['All', 'Outside Hitter', 'Setter', 'Middle Blocker', 'Opposite', 'Libero'];
 
 // ── Recharts 图表的通用样式配置 ────────────────────────────────
-// 这些 OKLCH 颜色值与 index.css 中的主题保持一致
 const CHART_COLORS = {
   gold: 'oklch(0.82 0.14 85)',       // --color-primary
   teal: 'oklch(0.75 0.14 175)',      // --color-teal
@@ -53,7 +52,6 @@ const CHART_COLORS = {
 };
 
 // ── Summary Insights 生成函数 ──────────────────────────────────
-// 自动扫描所有球员的运动科学数据，生成警报和洞察
 function generateInsights(playerList: Player[]) {
   const insights: {
     type: 'warning' | 'positive' | 'info';
@@ -154,7 +152,7 @@ function generateInsights(playerList: Player[]) {
   // 排序：警告优先，然后信息，最后正面
   const order = { warning: 0, info: 1, positive: 2 };
   insights.sort((a, b) => order[a.type] - order[b.type]);
-  return insights.slice(0, 6); // 最多显示 6 条
+  return insights.slice(0, 6);
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -195,7 +193,7 @@ export default function Dashboard() {
 
   // ── 渲染 ───────────────────────────────────────────────────
   return (
-    <div className="p-4 lg:p-6 space-y-6">
+    <div className="p-6 lg:p-8 space-y-6">
 
       {/* ── 页面标题 + 日期过滤器 ──────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
@@ -291,27 +289,32 @@ export default function Dashboard() {
             className="pl-9 bg-secondary border-border"
           />
         </div>
+
+        {/* 位置筛选下拉 — 添加 bg-card 确保不透明背景 */}
         <Select value={posFilter} onValueChange={setPosFilter}>
           <SelectTrigger className="w-44 bg-secondary border-border">
             <Filter className="w-3 h-3 mr-2 text-muted-foreground" />
             <SelectValue />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="bg-card border-border">
             {positions.map(p => (
               <SelectItem key={p} value={p}>{p}</SelectItem>
             ))}
           </SelectContent>
         </Select>
+
+        {/* 排序下拉 — 同样添加 bg-card */}
         <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
           <SelectTrigger className="w-44 bg-secondary border-border">
             <SelectValue />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="bg-card border-border">
             <SelectItem value="totalPoints">Total Points</SelectItem>
             <SelectItem value="attackPercentage">Attack %</SelectItem>
             <SelectItem value="pointsPerSet">Points/Set</SelectItem>
           </SelectContent>
         </Select>
+
         <Button
           variant="outline"
           size="sm"

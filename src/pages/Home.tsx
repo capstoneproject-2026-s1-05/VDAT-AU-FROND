@@ -17,8 +17,6 @@ import {
 import { players, dataSources } from '@/lib/mockData';
 
 // ── 动画变体定义 ──────────────────────────────────────────────
-// fadeUp: 元素从下方 30px 处淡入上升
-// custom 参数 i 控制延迟，实现交错入场效果
 const fadeUp = {
   hidden: { opacity: 0, y: 30 },
   visible: (i: number) => ({
@@ -29,7 +27,6 @@ const fadeUp = {
 };
 
 export default function Home() {
-  // 从 mockData 计算统计数字
   const connectedSources = dataSources.filter(s => s.status === 'connected').length;
   const totalRecords = dataSources.reduce((sum, s) => sum + (s.recordCount || 0), 0);
 
@@ -38,15 +35,14 @@ export default function Home() {
 
       {/* ═══════════════════════════════════════════════════════
           区域 1: Hero Section（英雄区）
-          - 半透明背景图 + 渐变遮罩
-          - 标题、描述文字、两个 CTA 按钮
+          修复：增加 px-6 lg:px-10 左右内边距，避免内容贴边
           ═══════════════════════════════════════════════════════ */}
       <section className="relative overflow-hidden">
-        {/* 背景渐变（替代背景图片，避免外部依赖） */}
+        {/* 背景渐变 */}
         <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-background to-teal/5" />
         <div className="absolute inset-0 bg-gradient-to-b from-background/40 via-background/70 to-background" />
 
-        <div className="relative container py-16 lg:py-24">
+        <div className="relative px-6 lg:px-10 py-16 lg:py-24">
           <div className="max-w-3xl">
             {/* 标签徽章 */}
             <motion.div
@@ -114,10 +110,9 @@ export default function Home() {
 
       {/* ═══════════════════════════════════════════════════════
           区域 2: Quick Stats（快速统计卡片）
-          - 4 个 glass-card 卡片，展示关键数字
-          - 使用 .map() 循环渲染，避免重复代码
+          修复：用 px-6 lg:px-10 替代 container，保持一致的内边距
           ═══════════════════════════════════════════════════════ */}
-      <section className="container py-12">
+      <section className="px-6 lg:px-10 py-12">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
             { label: 'Data Sources', value: dataSources.length, icon: Database, color: 'text-primary' },
@@ -143,10 +138,8 @@ export default function Home() {
 
       {/* ═══════════════════════════════════════════════════════
           区域 3: Feature Cards（功能入口卡片）
-          - 3 张卡片，分别链接到 DataSources、Dashboard、Comparison
-          - 悬停时有边框高亮和箭头移动效果
           ═══════════════════════════════════════════════════════ */}
-      <section className="container pb-16">
+      <section className="px-6 lg:px-10 pb-16">
         <h2 className="text-xl font-bold mb-6">Core Capabilities</h2>
         <div className="grid md:grid-cols-3 gap-4">
           {[
