@@ -544,21 +544,21 @@ export default function StrengthPower() {
             <div className="p-3 rounded-lg bg-secondary/30 border border-border">
               <p className="text-[10px] text-muted-foreground mb-1">Peak Velocity</p>
               <p className="stat-number text-xl text-foreground">
-                {effortAnalysis.velocityEfforts.peakVelocity.toFixed(1)}
+                {(effortAnalysis.velocityEfforts.peakVelocity ?? 0).toFixed(1)}
                 <span className="text-xs text-muted-foreground ml-1">m/s</span>
               </p>
             </div>
             <div className="p-3 rounded-lg bg-secondary/30 border border-border">
               <p className="text-[10px] text-muted-foreground mb-1">Avg Sprint Distance</p>
               <p className="stat-number text-xl text-foreground">
-                {effortAnalysis.velocityEfforts.avgDistance.toFixed(1)}
+                {(effortAnalysis.velocityEfforts.avgDistance ?? 0).toFixed(1)}
                 <span className="text-xs text-muted-foreground ml-1">m</span>
               </p>
             </div>
             <div className="p-3 rounded-lg bg-secondary/30 border border-border">
               <p className="text-[10px] text-muted-foreground mb-1">Peak Acceleration</p>
               <p className="stat-number text-xl text-foreground">
-                {effortAnalysis.accelerationEfforts.peakAcceleration.toFixed(1)}
+                {(effortAnalysis.accelerationEfforts.peakAcceleration ?? 0).toFixed(1)}
                 <span className="text-xs text-muted-foreground ml-1">m/s²</span>
               </p>
             </div>
@@ -716,7 +716,7 @@ export default function StrengthPower() {
                         tick={{ fill: 'oklch(0.6 0.02 260)', fontSize: 10 }}
                         label={{ value: 'Velocity (m/s)', angle: -90, position: 'insideLeft', style: { fill: 'oklch(0.6 0.02 260)', fontSize: 10 } }}
                       />
-                      <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => value.toFixed(3)} />
+                      formatter={(value: number) => (typeof value === 'number' ? value.toFixed(3) : String(value))}
                       <Scatter name="Mean Velocity" data={lvChartData} fill="oklch(0.7 0.18 280)" />
                     </ScatterChart>
                   </ResponsiveContainer>
