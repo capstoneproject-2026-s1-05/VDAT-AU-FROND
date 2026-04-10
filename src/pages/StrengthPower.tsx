@@ -61,6 +61,7 @@ import {
   useGymAwareLoadVelocity,
 } from '@/hooks/useGymAwareData';
 import { useLinkedAthletes } from '@/hooks/useLinkedAthletes';
+import { safeDateToLabel } from '@/lib/catapultApi';
 import { motion } from 'framer-motion';
 
 // ── Tooltip style (matches VDAT-AU-FROND dark theme) ────────
@@ -172,11 +173,11 @@ export default function StrengthPower() {
   const bmpTrendData = useMemo(() => {
     if (!longitudinalData || longitudinalData.length === 0) return [];
     return longitudinalData.map(p => ({
-      date: p.date ? p.date.split('T')[0].slice(5) : '',
-      jumpingLoad: p.bmpJumpingLoad,
-      runningLoad: p.bmpRunningLoad,
-      dynamicLoad: p.bmpDynamicLoad,
-      totalJumps: p.totalJumps ?? Math.round(p.bmpJumpingLoad),
+      date: safeDateToLabel(p.date),
+      jumpingLoad: p.bmpJumpingLoad ?? 0,
+      runningLoad: p.bmpRunningLoad ?? 0,
+      dynamicLoad: p.bmpDynamicLoad ?? 0,
+      totalJumps: p.totalJumps ?? Math.round(p.bmpJumpingLoad ?? 0),
     }));
   }, [longitudinalData]);
 
@@ -189,7 +190,7 @@ export default function StrengthPower() {
       { name: 'Moderate', value: bands.moderate, color: JUMP_BAND_COLORS.moderate },
       { name: 'High', value: bands.high, color: JUMP_BAND_COLORS.high },
       { name: 'Very High', value: bands.veryHigh, color: JUMP_BAND_COLORS.veryHigh },
-    ].filter(d => d.value > 0);
+    ].filter(d => (d.value ?? 0) > 0);
   }, [jumpProfile]);
 
   // Jump timeline for scatter plot
@@ -197,8 +198,8 @@ export default function StrengthPower() {
     if (!jumpProfile?.timeline) return [];
     return jumpProfile.timeline.map((j, i) => ({
       index: i + 1,
-      magnitude: j.magnitude,
-      duration: j.duration,
+      magnitude: j.magnitude ?? 0,
+      duration: j.duration ?? 0,
     }));
   }, [jumpProfile]);
 
@@ -355,21 +356,21 @@ export default function StrengthPower() {
         {[
           {
             label: 'Total Jumps',
-            value: jumpProfile?.totalJumps?.toString() || '—',
+            value: jumpProfile?.totalJumps != null ? String(jumpProfile.totalJumps) : '—',
             unit: 'in activity',
             icon: ArrowUpDown,
             color: 'text-primary',
           },
           {
             label: 'Peak Magnitude',
-            value: jumpProfile?.peakMagnitude?.toFixed(1) || '—',
+            value: jumpProfile?.peakMagnitude != null ? jumpProfile.peakMagnitude.toFixed(1) : '—',
             unit: 'g',
             icon: Zap,
             color: 'text-teal',
           },
           {
             label: 'Avg Magnitude',
-            value: jumpProfile?.avgMagnitude?.toFixed(1) || '—',
+            value: jumpProfile?.avgMagnitude != null ? jumpProfile.avgMagnitude.toFixed(1) : '—',
             unit: 'g',
             icon: TrendingUp,
             color: 'text-primary',
@@ -377,18 +378,22 @@ export default function StrengthPower() {
           {
             label: gymAwareSummary ? 'GymAware Reps' : 'Velocity Efforts',
             value: gymAwareSummary
-              ? gymAwareSummary.totalReps.toString()
-              : (effortAnalysis?.velocityEfforts?.count?.toString() || '—'),
+              ? String(gymAwareSummary.totalReps ?? 0)
+              : (effortAnalysis?.velocityEfforts?.count != null
+                  ? String(effortAnalysis.velocityEfforts.count)
+                  : '—'),
             unit: gymAwareSummary ? 'total' : 'sprints',
             icon: gymAwareSummary ? Dumbbell : Flame,
             color: gymAwareSummary ? 'text-primary' : 'text-orange-400',
           },
           {
-            label: loadVelocityProfile?.estimated1RM ? 'Est. 1RM' : 'Accel Efforts',
-            value: loadVelocityProfile?.estimated1RM
+            label: loadVelocityProfile?.estimated1RM != null ? 'Est. 1RM' : 'Accel Efforts',
+            value: loadVelocityProfile?.estimated1RM != null
               ? `${loadVelocityProfile.estimated1RM}`
-              : (effortAnalysis?.accelerationEfforts?.count?.toString() || '—'),
-            unit: loadVelocityProfile?.estimated1RM ? 'kg' : 'efforts',
+              : (effortAnalysis?.accelerationEfforts?.count != null
+                  ? String(effortAnalysis.accelerationEfforts.count)
+                  : '—'),
+            unit: loadVelocityProfile?.estimated1RM != null ? 'kg' : 'efforts',
             icon: Gauge,
             color: 'text-teal',
           },
@@ -539,26 +544,26 @@ export default function StrengthPower() {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="p-3 rounded-lg bg-secondary/30 border border-border">
               <p className="text-[10px] text-muted-foreground mb-1">Total Efforts</p>
-              <p className="stat-number text-xl text-foreground">{effortAnalysis.totalEfforts}</p>
+              <p className="stat-number text-xl text-foreground">{effortAnalysis.totalEfforts ?? 0}</p>
             </div>
             <div className="p-3 rounded-lg bg-secondary/30 border border-border">
               <p className="text-[10px] text-muted-foreground mb-1">Peak Velocity</p>
               <p className="stat-number text-xl text-foreground">
-                {effortAnalysis.velocityEfforts.peakVelocity.toFixed(1)}
+                {(effortAnalysis.velocityEfforts?.peakVelocity ?? 0).toFixed(1)}
                 <span className="text-xs text-muted-foreground ml-1">m/s</span>
               </p>
             </div>
             <div className="p-3 rounded-lg bg-secondary/30 border border-border">
               <p className="text-[10px] text-muted-foreground mb-1">Avg Sprint Distance</p>
               <p className="stat-number text-xl text-foreground">
-                {effortAnalysis.velocityEfforts.avgDistance.toFixed(1)}
+                {(effortAnalysis.velocityEfforts?.avgDistance ?? 0).toFixed(1)}
                 <span className="text-xs text-muted-foreground ml-1">m</span>
               </p>
             </div>
             <div className="p-3 rounded-lg bg-secondary/30 border border-border">
               <p className="text-[10px] text-muted-foreground mb-1">Peak Acceleration</p>
               <p className="stat-number text-xl text-foreground">
-                {effortAnalysis.accelerationEfforts.peakAcceleration.toFixed(1)}
+                {(effortAnalysis.accelerationEfforts?.peakAcceleration ?? 0).toFixed(1)}
                 <span className="text-xs text-muted-foreground ml-1">m/s²</span>
               </p>
             </div>
@@ -716,7 +721,7 @@ export default function StrengthPower() {
                         tick={{ fill: 'oklch(0.6 0.02 260)', fontSize: 10 }}
                         label={{ value: 'Velocity (m/s)', angle: -90, position: 'insideLeft', style: { fill: 'oklch(0.6 0.02 260)', fontSize: 10 } }}
                       />
-                      <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => value.toFixed(3)} />
+                      <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => (typeof value === 'number' ? value.toFixed(3) : value)} />
                       <Scatter name="Mean Velocity" data={lvChartData} fill="oklch(0.7 0.18 280)" />
                     </ScatterChart>
                   </ResponsiveContainer>
@@ -742,11 +747,11 @@ export default function StrengthPower() {
                     <p className="text-[10px] text-muted-foreground">Est. 1RM</p>
                   </div>
                   <div className="p-2 rounded-lg bg-secondary/30 border border-border text-center">
-                    <p className="stat-number text-lg text-foreground">{loadVelocityProfile.mvt} m/s</p>
+                    <p className="stat-number text-lg text-foreground">{loadVelocityProfile.mvt ?? '—'} m/s</p>
                     <p className="text-[10px] text-muted-foreground">MVT</p>
                   </div>
                   <div className="p-2 rounded-lg bg-secondary/30 border border-border text-center">
-                    <p className="stat-number text-lg text-foreground">{loadVelocityProfile.repsAnalysed}</p>
+                    <p className="stat-number text-lg text-foreground">{loadVelocityProfile.repsAnalysed ?? 0}</p>
                     <p className="text-[10px] text-muted-foreground">Reps Analysed</p>
                   </div>
                 </div>
