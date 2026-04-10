@@ -107,7 +107,7 @@ export interface CatapultGroupRow {
 export interface CatapultLongitudinalPoint {
   activityId: string;
   activityName: string;
-  date: string;
+  date: string | number;
   periodName: string;
   /** Activity tags from Catapult (e.g. ["match", "vnl"]) for session type classification */
   tagNames: string[];
@@ -540,6 +540,31 @@ export async function getCatapultActivityTags(
 }
 
 // ============================================================
+// Helper: Safe date formatting for Catapult longitudinal data
+// ============================================================
+
+/**
+ * Safely convert a date value (Unix timestamp number or ISO string) to
+ * an ISO date string (YYYY-MM-DD). Returns '' if the value is falsy.
+ */
+export function safeDateToISO(date: string | number | null | undefined): string {
+  if (!date) return '';
+  if (typeof date === 'number') {
+    return new Date(date * 1000).toISOString().split('T')[0];
+  }
+  // Already a string — extract the date portion
+  return date.includes('T') ? date.split('T')[0] : date;
+}
+
+/**
+ * Safely convert a date value to a short display label (MM-DD).
+ */
+export function safeDateToLabel(date: string | number | null | undefined): string {
+  const iso = safeDateToISO(date);
+  return iso ? iso.slice(5) : '';
+}
+
+// ============================================================
 // Data Transformation: Catapult → Frontend Mock Format
 // ============================================================
 
@@ -631,7 +656,7 @@ export function transformLongitudinalToSessions(
   points: CatapultLongitudinalPoint[]
 ): TrainingSession[] {
   return points.map(p => ({
-    date: p.date ? p.date.split('T')[0] : '',
+    date: safeDateToISO(p.date),
     sessionType: classifySessionType(p.activityName, p.tagNames),
     playerLoad: p.playerLoad,
     jumpCount: p.totalJumps != null ? Math.round(p.totalJumps) : Math.round(p.bmpJumpingLoad),
