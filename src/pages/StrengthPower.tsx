@@ -87,6 +87,7 @@ export default function StrengthPower() {
   const {
     athletes: catapultAthletes,
     activities,
+    participationMap,
     isLive,
     disconnected,
     loading: apiLoading,
@@ -108,19 +109,55 @@ export default function StrengthPower() {
   const [selectedActivityId, setSelectedActivityId] = useState('');
   const [selectedExercise, setSelectedExercise] = useState<string | null>(null);
 
-  // Set default player once list is ready
-  useEffect(() => {
-    if (players.length > 0 && !selectedPlayerId) {
-      setSelectedPlayerId(players[0].id);
-    }
-  }, [players, selectedPlayerId]);
+  // ── Filter activities to only those the selected athlete participated in ──
+  const filteredActivities = useMemo(() => {
+    if (!selectedPlayerId || Object.keys(participationMap).length === 0) return activities;
+    return activities.filter(a => {
+      const athleteIds = participationMap[a.id];
+      return athleteIds && athleteIds.includes(selectedPlayerId);
+    });
+  }, [activities, participationMap, selectedPlayerId]);
 
-  // Set default activity
+  // ── Count activities per athlete (for sorting athletes by data availability) ──
+  const athleteActivityCount = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const athleteIds of Object.values(participationMap)) {
+      for (const aid of athleteIds) {
+        counts[aid] = (counts[aid] || 0) + 1;
+      }
+    }
+    return counts;
+  }, [participationMap]);
+
+  // ── Sort players: those with more activity data first ──
+  const sortedPlayers = useMemo(() => {
+    return [...players].sort((a, b) => {
+      const countA = athleteActivityCount[a.id] || 0;
+      const countB = athleteActivityCount[b.id] || 0;
+      return countB - countA;
+    });
+  }, [players, athleteActivityCount]);
+
+  // Set smart default player — pick the athlete with the most activities
   useEffect(() => {
-    if (activities.length > 0 && !selectedActivityId) {
+    if (sortedPlayers.length > 0 && !selectedPlayerId) {
+      setSelectedPlayerId(sortedPlayers[0].id);
+    }
+  }, [sortedPlayers, selectedPlayerId]);
+
+  // Set smart default activity — pick the first activity the selected athlete participated in
+  useEffect(() => {
+    if (filteredActivities.length > 0) {
+      // If current selection is not in the filtered list, auto-select the first one
+      const currentValid = filteredActivities.some(a => a.id === selectedActivityId);
+      if (!currentValid) {
+        setSelectedActivityId(filteredActivities[0].id);
+      }
+    } else if (activities.length > 0 && !selectedActivityId) {
+      // Fallback: if no filtered activities, select first overall
       setSelectedActivityId(activities[0].id);
     }
-  }, [activities, selectedActivityId]);
+  }, [filteredActivities, selectedActivityId, activities]);
 
   const player = useMemo(
     () => players.find(p => p.id === selectedPlayerId),
@@ -313,30 +350,42 @@ export default function StrengthPower() {
           </p>
         </div>
         <div className="flex gap-3 flex-wrap">
-          <Select value={selectedPlayerId} onValueChange={(v) => { setSelectedPlayerId(v); setSelectedExercise(null); }}>
+          <Select value={selectedPlayerId} onValueChange={(v) => { setSelectedPlayerId(v); setSelectedExercise(null); setSelectedActivityId(''); }}>
             <SelectTrigger className="w-48 bg-secondary border-border">
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="bg-card border-border">
-              {players.map(p => (
-                <SelectItem key={p.id} value={p.id}>
-                  {p.number ? `#${p.number} ` : ''}{p.name}
-                  {linkedAthletes.find(la => la.catapultId === p.id)?.hasGymAware ? ' ✔' : ''}
-                </SelectItem>
-              ))}
+              {sortedPlayers.map(p => {
+                const actCount = athleteActivityCount[p.id] || 0;
+                return (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name}
+                    {linkedAthletes.find(la => la.catapultId === p.id)?.hasGymAware ? ' ✔' : ''}
+                    {actCount > 0 && (
+                      <span className="ml-1 text-[10px] text-muted-foreground">({actCount})</span>
+                    )}
+                  </SelectItem>
+                );
+              })}
             </SelectContent>
           </Select>
           {activities.length > 0 && (
             <Select value={selectedActivityId} onValueChange={setSelectedActivityId}>
               <SelectTrigger className="w-56 bg-secondary border-border">
-                <SelectValue placeholder="Select activity..." />
+                <SelectValue placeholder={filteredActivities.length === 0 ? 'No activities for this athlete' : 'Select activity...'} />
               </SelectTrigger>
               <SelectContent className="bg-card border-border">
-                {activities.slice(0, 15).map(a => (
-                  <SelectItem key={a.id} value={a.id}>
-                    {a.name.length > 30 ? a.name.slice(0, 30) + '...' : a.name}
-                  </SelectItem>
-                ))}
+                {filteredActivities.length > 0 ? (
+                  filteredActivities.map(a => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.name.length > 30 ? a.name.slice(0, 30) + '...' : a.name}
+                    </SelectItem>
+                  ))
+                ) : (
+                  <div className="px-3 py-2 text-xs text-muted-foreground">
+                    No activities found for this athlete
+                  </div>
+                )}
               </SelectContent>
             </Select>
           )}

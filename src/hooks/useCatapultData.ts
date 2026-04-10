@@ -16,6 +16,7 @@ import {
   isCatapultAvailable,
   getCatapultAthletes,
   getCatapultActivities,
+  getCatapultActivityParticipation,
   getCatapultGroupSummary,
   getCatapultLongitudinal,
   getCatapultEnhancedStats,
@@ -52,6 +53,8 @@ interface CatapultDataState {
   athletes: CatapultAthlete[];
   /** Activities from Catapult (empty when disconnected) */
   activities: CatapultActivity[];
+  /** Map of activityId → array of athleteIds that participated */
+  participationMap: Record<string, string[]>;
 }
 
 // ============================================================
@@ -66,6 +69,7 @@ export function useCatapultData() {
     error: null,
     athletes: [],
     activities: [],
+    participationMap: {},
   });
 
   const checkedRef = useRef(false);
@@ -79,9 +83,10 @@ export function useCatapultData() {
         const available = await isCatapultAvailable();
 
         if (available) {
-          const [athletes, activities] = await Promise.all([
+          const [athletes, activities, participationMap] = await Promise.all([
             getCatapultAthletes(),
             getCatapultActivities(1, 25),
+            getCatapultActivityParticipation(25),
           ]);
 
           setState({
@@ -91,6 +96,7 @@ export function useCatapultData() {
             error: null,
             athletes,
             activities,
+            participationMap,
           });
         } else {
           // Backend not reachable — DISCONNECTED, no mock fallback
@@ -101,6 +107,7 @@ export function useCatapultData() {
             error: 'Backend API is not reachable. Start the backend server to connect to Catapult.',
             athletes: [],
             activities: [],
+            participationMap: {},
           });
         }
       } catch (err) {
@@ -111,6 +118,7 @@ export function useCatapultData() {
           error: err instanceof Error ? err.message : 'Failed to connect to Catapult API',
           athletes: [],
           activities: [],
+          participationMap: {},
         });
       }
     }
