@@ -7,7 +7,7 @@
  *   - GymAware Cloud API provides: Load-velocity profiling, estimated 1RM,
  *     peak power, mean velocity, exercise summaries
  *   - Cross-platform athlete matching links Catapult ↔ GymAware athletes
- *   - VALD (placeholder): CMJ jump height, peak force, asymmetry — awaiting API credentials
+ *   - VALD ForceDecks API provides: CMJ jump height, peak force, RSI, L/R asymmetry
  *   - When backend is unavailable, shows DISCONNECTED state
  *   - NO mock data fallback
  *
@@ -61,6 +61,7 @@ import {
   useGymAwareLoadVelocity,
 } from '@/hooks/useGymAwareData';
 import { useLinkedAthletes } from '@/hooks/useLinkedAthletes';
+import { useValdData, useValdCMJSummary, useValdCMJTrend } from '@/hooks/useValdData';
 import { safeDateToLabel } from '@/lib/catapultApi';
 import { motion } from 'framer-motion';
 
@@ -101,6 +102,9 @@ export default function StrengthPower() {
 
   // GymAware connection status
   const { isLive: gymAwareLive, disconnected: gymAwareDisconnected } = useGymAwareData();
+
+  // VALD connection status
+  const { isLive: valdLive } = useValdData();
 
   // Linked athletes (cross-platform matching)
   const { athletes: linkedAthletes } = useLinkedAthletes();
@@ -203,6 +207,13 @@ export default function StrengthPower() {
   // ── GymAware load-velocity profile ──
   const { profile: loadVelocityProfile, loading: lvLoading } =
     useGymAwareLoadVelocity(gymAwareLive ? gymAwareRef : null, selectedExercise);
+
+  // ── VALD CMJ data (by athlete name) ──
+  const valdAthleteName = player ? player.name : null;
+  const { summary: valdSummary, loading: valdSummaryLoading } =
+    useValdCMJSummary(valdLive ? valdAthleteName : null);
+  const { trend: valdTrend, loading: valdTrendLoading } =
+    useValdCMJTrend(valdLive && valdSummary?.hasData ? valdAthleteName : null);
 
   // ── Derived chart data ─────────────────────────────────────
 
@@ -823,35 +834,206 @@ export default function StrengthPower() {
         </motion.div>
       </div>
 
-      {/* ── VALD Placeholder ─────────────────────────────── */}
+      {/* ── VALD CMJ Testing ─────────────────────────────── */}
       <motion.div
-        className="glass-card rounded-xl p-5 border border-dashed border-border"
+        className="glass-card rounded-xl p-5"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.45 }}
       >
-        <h2 className="text-sm font-semibold mb-3 flex items-center gap-2">
+        <h2 className="text-sm font-semibold mb-4 flex items-center gap-2">
           <ArrowUpDown className="w-4 h-4 text-primary" />
           CMJ Testing (VALD ForceDecks)
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-muted text-muted-foreground border border-border">
-            <Database className="w-3 h-3" /> AWAITING INTEGRATION
-          </span>
+          {valdLive ? (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              <Wifi className="w-3 h-3" /> LIVE
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-muted text-muted-foreground border border-border">
+              <WifiOff className="w-3 h-3" /> DISCONNECTED
+            </span>
+          )}
         </h2>
-        <div className="flex flex-col items-center justify-center py-8 text-center">
-          <ArrowUpDown className="w-10 h-10 text-muted-foreground/20 mb-3" />
-          <p className="text-sm text-muted-foreground mb-2">VALD Force Plate Data</p>
-          <p className="text-xs text-muted-foreground/70 max-w-xs">
-            CMJ jump height, peak force, RSI, and left/right asymmetry will appear here once VALD API credentials are configured.
-          </p>
-          <div className="flex gap-4 mt-4">
-            {['Jump Height', 'Peak Force', 'RSI', 'Asymmetry'].map(metric => (
-              <div key={metric} className="text-center">
-                <p className="stat-number text-lg text-muted-foreground/30">—</p>
-                <p className="text-[10px] text-muted-foreground/50">{metric}</p>
-              </div>
-            ))}
+
+        {valdSummaryLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+            <span className="ml-2 text-sm text-muted-foreground">Loading CMJ data...</span>
           </div>
-        </div>
+        ) : !valdLive ? (
+          <div className="flex flex-col items-center justify-center py-8 text-center">
+            <WifiOff className="w-8 h-8 text-muted-foreground/20 mb-2" />
+            <p className="text-sm text-muted-foreground">VALD API not connected</p>
+          </div>
+        ) : !valdSummary?.hasData ? (
+          <div className="flex flex-col items-center justify-center py-8 text-center">
+            <ArrowUpDown className="w-8 h-8 text-muted-foreground/20 mb-2" />
+            <p className="text-sm text-muted-foreground">No CMJ data for this athlete</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {/* CMJ Summary Cards */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              {[
+                {
+                  label: 'Jump Height',
+                  best: valdSummary.best?.jumpHeight,
+                  avg: valdSummary.avg?.jumpHeight,
+                  unit: 'cm',
+                  fmt: (v: number) => v.toFixed(1),
+                },
+                {
+                  label: 'Peak Force',
+                  best: valdSummary.best?.peakForce,
+                  avg: valdSummary.avg?.peakForce,
+                  unit: 'N',
+                  fmt: (v: number) => v.toFixed(0),
+                },
+                {
+                  label: 'Peak Power',
+                  best: valdSummary.best?.peakPower,
+                  avg: valdSummary.avg?.peakPower,
+                  unit: 'W',
+                  fmt: (v: number) => v.toFixed(0),
+                },
+                {
+                  label: 'RSI-modified',
+                  best: valdSummary.best?.rsiModified,
+                  avg: valdSummary.avg?.rsiModified,
+                  unit: '',
+                  fmt: (v: number) => v.toFixed(2),
+                },
+                {
+                  label: 'Peak Velocity',
+                  best: valdSummary.best?.peakVelocity,
+                  avg: valdSummary.avg?.peakVelocity,
+                  unit: 'm/s',
+                  fmt: (v: number) => v.toFixed(2),
+                },
+              ].map(card => (
+                <div key={card.label} className="glass-card rounded-lg p-3 text-center">
+                  <p className="stat-number text-lg">
+                    {card.best != null ? card.fmt(card.best) : '—'}
+                    {card.unit && <span className="text-xs text-muted-foreground ml-1">{card.unit}</span>}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">{card.label} (best)</p>
+                  {card.avg != null && (
+                    <p className="text-[9px] text-muted-foreground/60 mt-0.5">
+                      avg: {card.fmt(card.avg)} {card.unit}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Test metadata */}
+            <div className="flex flex-wrap gap-4 text-[10px] text-muted-foreground/70 px-1">
+              <span>Tests: {valdSummary.totalTests}</span>
+              <span>Trials (latest): {valdSummary.trialCount}</span>
+              <span>Weight: {valdSummary.weight?.toFixed(1)} kg</span>
+              {valdSummary.testDate && (
+                <span>Latest: {new Date(valdSummary.testDate).toLocaleDateString()}</span>
+              )}
+            </div>
+
+            {/* Asymmetry + Trend Row */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* L/R Asymmetry */}
+              <div className="glass-card rounded-lg p-4">
+                <h3 className="text-xs font-medium mb-3 flex items-center gap-1">
+                  <ArrowUpDown className="w-3 h-3 text-primary" />
+                  Peak Force Asymmetry
+                </h3>
+                {valdSummary.asymmetry ? (
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-blue-400">Left: {valdSummary.asymmetry.left.toFixed(0)} N</span>
+                      <span className={`font-mono text-sm font-bold ${
+                        Math.abs(valdSummary.asymmetry.index) > 10 ? 'text-red-400' :
+                        Math.abs(valdSummary.asymmetry.index) > 5 ? 'text-yellow-400' : 'text-emerald-400'
+                      }`}>
+                        {valdSummary.asymmetry.index > 0 ? '+' : ''}{valdSummary.asymmetry.index.toFixed(1)}%
+                      </span>
+                      <span className="text-orange-400">Right: {valdSummary.asymmetry.right.toFixed(0)} N</span>
+                    </div>
+                    {/* Asymmetry bar */}
+                    <div className="relative h-4 bg-muted rounded-full overflow-hidden">
+                      {(() => {
+                        const total = valdSummary.asymmetry!.left + valdSummary.asymmetry!.right;
+                        const leftPct = total > 0 ? (valdSummary.asymmetry!.left / total) * 100 : 50;
+                        return (
+                          <>
+                            <div
+                              className="absolute inset-y-0 left-0 bg-blue-500/40 rounded-l-full"
+                              style={{ width: `${leftPct}%` }}
+                            />
+                            <div
+                              className="absolute inset-y-0 right-0 bg-orange-500/40 rounded-r-full"
+                              style={{ width: `${100 - leftPct}%` }}
+                            />
+                            <div
+                              className="absolute inset-y-0 w-0.5 bg-white/40"
+                              style={{ left: '50%' }}
+                            />
+                          </>
+                        );
+                      })()}
+                    </div>
+                    <p className="text-[9px] text-muted-foreground/60 text-center">
+                      {Math.abs(valdSummary.asymmetry.index) > 10
+                        ? 'Significant asymmetry — monitor closely'
+                        : Math.abs(valdSummary.asymmetry.index) > 5
+                        ? 'Moderate asymmetry — within acceptable range'
+                        : 'Minimal asymmetry — well balanced'}
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground text-center py-4">No asymmetry data available</p>
+                )}
+              </div>
+
+              {/* CMJ Trend Chart */}
+              <div className="glass-card rounded-lg p-4">
+                <h3 className="text-xs font-medium mb-3 flex items-center gap-1">
+                  <TrendingUp className="w-3 h-3 text-emerald-400" />
+                  Jump Height Trend
+                </h3>
+                {valdTrendLoading ? (
+                  <div className="flex items-center justify-center py-6">
+                    <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                  </div>
+                ) : valdTrend.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={140}>
+                    <LineChart data={valdTrend.map(p => ({
+                      date: new Date(p.date).toLocaleDateString('en-AU', { month: 'short', day: 'numeric' }),
+                      jumpHeight: p.jumpHeight != null ? Number(p.jumpHeight.toFixed(1)) : null,
+                    }))}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.25 0.02 260)" />
+                      <XAxis dataKey="date" tick={{ fontSize: 9, fill: 'oklch(0.55 0.02 260)' }} />
+                      <YAxis
+                        tick={{ fontSize: 9, fill: 'oklch(0.55 0.02 260)' }}
+                        domain={['auto', 'auto']}
+                        label={{ value: 'cm', angle: -90, position: 'insideLeft', style: { fontSize: 9, fill: 'oklch(0.55 0.02 260)' } }}
+                      />
+                      <Tooltip contentStyle={tooltipStyle} />
+                      <Line
+                        type="monotone"
+                        dataKey="jumpHeight"
+                        stroke="#22c55e"
+                        strokeWidth={2}
+                        dot={{ r: 3, fill: '#22c55e' }}
+                        connectNulls
+                        name="Jump Height (cm)"
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <p className="text-xs text-muted-foreground text-center py-6">No trend data available</p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </motion.div>
     </div>
   );
