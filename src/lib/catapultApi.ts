@@ -357,6 +357,19 @@ export async function getCatapultActivity(activityId: string): Promise<CatapultA
 }
 
 /**
+ * Fetch activity-athlete participation map.
+ * Returns a record mapping activityId → array of athleteIds that participated.
+ */
+export async function getCatapultActivityParticipation(
+  pageSize = 25
+): Promise<Record<string, string[]>> {
+  const res = await catapultFetch<{ data: Record<string, string[]> }>(
+    `/activity-participation?pageSize=${pageSize}`
+  );
+  return res.data;
+}
+
+/**
  * Query performance statistics
  */
 export async function queryCatapultStats(options: {
