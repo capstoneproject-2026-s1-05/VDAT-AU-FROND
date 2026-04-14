@@ -3,16 +3,22 @@
  *
  * Strategy:
  *   1. On mount, check if the backend FIVB API is available
- *   2. If available, fetch real match/tournament data and demo rankings/stats
+ *   2. If available, fetch real data from all endpoints
  *   3. If unavailable, set `disconnected` state
  *   4. Matches auto-refresh every 30 seconds when live
+ *
+ * All data is now real (no demo data):
+ *   - Matches: FIVB VIS API
+ *   - Tournaments: FIVB VIS API
+ *   - Rankings: Volleyball World API
+ *   - Player Stats: Volleyball World scraping
  *
  * Hooks:
  *   useFivbData()          — Connection check
  *   useFivbMatches()       — Recent matches with auto-refresh
  *   useFivbTournaments()   — Tournament overview
- *   useFivbRankings()      — World rankings
- *   useFivbPlayerStats()   — Player statistics
+ *   useFivbRankings()      — World rankings (real)
+ *   useFivbPlayerStats()   — Player statistics (real)
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -179,14 +185,13 @@ export function useFivbTournaments(isLive: boolean, limit = 10) {
 }
 
 // ============================================================
-// Hook: useFivbRankings
+// Hook: useFivbRankings (Real Data)
 // ============================================================
 
 export function useFivbRankings(isLive: boolean, gender = 'M') {
   const [rankings, setRankings] = useState<FivbRankingEntry[]>([]);
-  const [australiaRank, setAustraliaRank] = useState<FivbRankingEntry | null>(null);
-  const [isDemo, setIsDemo] = useState(false);
-  const [demoNote, setDemoNote] = useState('');
+  const [selectedTeamRank, setSelectedTeamRank] = useState<FivbRankingEntry | null>(null);
+  const [lastUpdate, setLastUpdate] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -204,9 +209,8 @@ export function useFivbRankings(isLive: boolean, gender = 'M') {
       .then((result: FivbRankingsResponse) => {
         if (!cancelled) {
           setRankings(result.rankings);
-          setAustraliaRank(result.australiaRank ?? null);
-          setIsDemo(result.isDemo);
-          setDemoNote(result.demoNote || '');
+          setSelectedTeamRank(result.selectedTeamRank ?? null);
+          setLastUpdate(result.lastUpdate ?? null);
           setLoading(false);
         }
       })
@@ -220,17 +224,16 @@ export function useFivbRankings(isLive: boolean, gender = 'M') {
     return () => { cancelled = true; };
   }, [isLive, gender]);
 
-  return { rankings, australiaRank, isDemo, demoNote, loading, error };
+  return { rankings, selectedTeamRank, lastUpdate, loading, error };
 }
 
 // ============================================================
-// Hook: useFivbPlayerStats
+// Hook: useFivbPlayerStats (Real Data)
 // ============================================================
 
 export function useFivbPlayerStats(isLive: boolean, gender = 'M') {
   const [players, setPlayers] = useState<FivbPlayer[]>([]);
-  const [isDemo, setIsDemo] = useState(false);
-  const [demoNote, setDemoNote] = useState('');
+  const [competition, setCompetition] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -248,8 +251,7 @@ export function useFivbPlayerStats(isLive: boolean, gender = 'M') {
       .then((result: FivbPlayerStatsResponse) => {
         if (!cancelled) {
           setPlayers(result.players);
-          setIsDemo(result.isDemo);
-          setDemoNote(result.demoNote || '');
+          setCompetition(result.competition || '');
           setLoading(false);
         }
       })
@@ -263,5 +265,5 @@ export function useFivbPlayerStats(isLive: boolean, gender = 'M') {
     return () => { cancelled = true; };
   }, [isLive, gender]);
 
-  return { players, isDemo, demoNote, loading, error };
+  return { players, competition, loading, error };
 }

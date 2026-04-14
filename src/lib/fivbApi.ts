@@ -2,11 +2,12 @@
  * FIVB Live Data API Client
  *
  * Connects to the Volleyball Toolkit Backend's /api/fivb-live/* endpoints
- * which provide curated FIVB VIS data and demo data for the Live Data page.
+ * which provide curated FIVB data for the Live Data page.
  *
  * Data sources:
  *   - Matches & Tournaments: Real FIVB VIS API data
- *   - Rankings & Player Stats: Demo data (FIVB credentials required for real data)
+ *   - Rankings: Real data from Volleyball World API
+ *   - Player Stats: Real data scraped from Volleyball World competition pages
  *
  * Backend endpoints: /api/fivb-live/*
  */
@@ -86,48 +87,59 @@ export interface FivbTournamentsResponse {
   timestamp: string;
 }
 
+// --- Rankings (Real data from Volleyball World API) ---
+
+export interface FivbRecentMatch {
+  date: string;
+  opponent: string;
+  opponentCode: string;
+  result: string;
+  event: string;
+  pointChange: number;
+}
+
 export interface FivbRankingEntry {
   rank: number;
   team: string;
   code: string;
   points: number;
-  previousRank: number;
   trend: 'up' | 'down' | 'stable';
+  confederation: string;
+  confederationName: string;
+  flagUrl: string | null;
+  recentMatches: FivbRecentMatch[];
 }
 
 export interface FivbRankingsResponse {
   success: boolean;
   rankings: FivbRankingEntry[];
-  australiaRank: FivbRankingEntry | null;
+  selectedTeamRank: FivbRankingEntry | null;
   gender: string;
-  isDemo: boolean;
-  demoNote: string;
+  isLive: boolean;
+  lastUpdate: string | null;
   source: string;
   timestamp: string;
 }
 
-export interface FivbPlayerStats {
-  pointsScored: number;
-  attackEfficiency: number;
-  serveAces: number;
-  blocks: number;
-  digs: number;
-  attackAttempts: number;
-}
+// --- Player Statistics (Real data from Volleyball World scraping) ---
 
 export interface FivbPlayer {
+  rank: number;
   name: string;
-  position: string;
-  number: number;
-  stats: FivbPlayerStats;
+  team: string;
+  points: number;
+  attackPoints: number;
+  blockPoints: number;
+  servePoints: number;
 }
 
 export interface FivbPlayerStatsResponse {
   success: boolean;
   players: FivbPlayer[];
+  totalPlayers: number;
+  competition: string;
   gender: string;
-  isDemo: boolean;
-  demoNote: string;
+  isLive: boolean;
   source: string;
   timestamp: string;
 }
@@ -211,16 +223,18 @@ export async function getFivbTournaments(
 }
 
 /**
- * Get world rankings (demo data).
+ * Get world rankings (real data from Volleyball World API).
  */
 export async function getFivbRankings(
-  gender = 'M'
+  gender = 'M',
+  teamCode = 'AUS'
 ): Promise<FivbRankingsResponse> {
-  return fivbFetch<FivbRankingsResponse>(`/rankings?gender=${gender}`);
+  const params = new URLSearchParams({ gender, teamCode });
+  return fivbFetch<FivbRankingsResponse>(`/rankings?${params.toString()}`);
 }
 
 /**
- * Get player statistics (demo data).
+ * Get player statistics (real data from Volleyball World competition pages).
  */
 export async function getFivbPlayerStats(
   gender = 'M'

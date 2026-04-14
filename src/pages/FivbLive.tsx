@@ -2,11 +2,12 @@
  * FivbLive: FIVB Live Data page
  *
  * Displays live/recent match scores, tournament standings, world rankings,
- * and player statistics from the FIVB Volleyball Information System.
+ * and player statistics from FIVB data sources.
  *
  * Data strategy:
  *   - Matches & Tournaments: Real FIVB VIS API data via backend proxy
- *   - Rankings & Player Stats: Demo data (clearly labeled)
+ *   - Rankings: Real data from Volleyball World API
+ *   - Player Stats: Real data scraped from Volleyball World competition pages
  *   - Auto-refresh for match data every 30 seconds
  *   - Graceful disconnected state when backend is unavailable
  */
@@ -27,16 +28,11 @@ import {
   CartesianGrid,
   ResponsiveContainer,
   Legend,
-  RadarChart,
-  Radar,
-  PolarGrid,
-  PolarAngleAxis,
-  PolarRadiusAxis,
 } from 'recharts';
 import {
   Globe, Wifi, WifiOff, Loader2, Trophy, Users,
   TrendingUp, TrendingDown, Minus, Medal,
-  BarChart3, Shield, Clock, RefreshCw, AlertTriangle,
+  BarChart3, Shield, Clock, RefreshCw,
 } from 'lucide-react';
 import {
   useFivbData,
@@ -86,11 +82,11 @@ function TrendIcon({ trend }: { trend: string }) {
   return <Minus className="w-3.5 h-3.5 text-muted-foreground" />;
 }
 
-// ── Demo badge ─────────────────────────────────────────────
-function DemoBadge() {
+// ── Data source badge ─────────────────────────────────────
+function DataSourceBadge({ source }: { source: string }) {
   return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-500/15 text-amber-400 border border-amber-500/30">
-      <AlertTriangle className="w-3 h-3" /> DEMO DATA
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-teal/15 text-teal border border-teal/30">
+      <Wifi className="w-3 h-3" /> {source}
     </span>
   );
 }
@@ -112,10 +108,10 @@ export default function FivbLive() {
 
   const { tournaments, loading: tournamentsLoading } = useFivbTournaments(isLive, 6);
 
-  const { rankings, australiaRank, isDemo: rankingsIsDemo, loading: rankingsLoading } =
+  const { rankings, selectedTeamRank, lastUpdate: rankingsLastUpdate, loading: rankingsLoading } =
     useFivbRankings(isLive, selectedGender);
 
-  const { players, isDemo: playersIsDemo, loading: playersLoading } =
+  const { players, competition, loading: playersLoading } =
     useFivbPlayerStats(isLive, selectedGender);
 
   // Update document title
@@ -143,39 +139,17 @@ export default function FivbLive() {
     return { wins, losses, total: finished.length };
   }, [matches, selectedTeamCode]);
 
-  // Player stats for bar chart
+  // Player stats for bar chart (top 15 scorers)
   const playerChartData = useMemo(() => {
-    return players.map((p: FivbPlayer) => ({
-      name: p.name.split(' ').pop() || p.name,
-      fullName: p.name,
-      points: p.stats.pointsScored,
-      aces: p.stats.serveAces,
-      blocks: p.stats.blocks,
-      digs: p.stats.digs,
-      efficiency: Math.round(p.stats.attackEfficiency * 100),
+    return players.slice(0, 15).map((p: FivbPlayer) => ({
+      name: p.name,
+      team: p.team,
+      points: p.points,
+      attack: p.attackPoints,
+      block: p.blockPoints,
+      serve: p.servePoints,
     }));
   }, [players]);
-
-  // Player radar data for selected player
-  const [selectedPlayerIdx, setSelectedPlayerIdx] = useState(0);
-  const selectedPlayer = players[selectedPlayerIdx] ?? null;
-
-  const radarData = useMemo(() => {
-    if (!selectedPlayer) return [];
-    const s = selectedPlayer.stats;
-    // Normalize values to 0-100 scale for radar
-    const maxPoints = Math.max(...players.map((p: FivbPlayer) => p.stats.pointsScored), 1);
-    const maxAces = Math.max(...players.map((p: FivbPlayer) => p.stats.serveAces), 1);
-    const maxBlocks = Math.max(...players.map((p: FivbPlayer) => p.stats.blocks), 1);
-    const maxDigs = Math.max(...players.map((p: FivbPlayer) => p.stats.digs), 1);
-    return [
-      { stat: 'Points', value: Math.round((s.pointsScored / maxPoints) * 100) },
-      { stat: 'Efficiency', value: Math.round(s.attackEfficiency * 100) },
-      { stat: 'Aces', value: Math.round((s.serveAces / maxAces) * 100) },
-      { stat: 'Blocks', value: Math.round((s.blocks / maxBlocks) * 100) },
-      { stat: 'Digs', value: Math.round((s.digs / maxDigs) * 100) },
-    ];
-  }, [selectedPlayer, players]);
 
   // Rankings top 10 for chart
   const rankingsTop10 = useMemo(() => {
@@ -186,6 +160,16 @@ export default function FivbLive() {
       rank: r.rank,
     }));
   }, [rankings]);
+
+  // Rankings top 20 for table display
+  const rankingsDisplay = useMemo(() => {
+    const top20 = rankings.filter((r: FivbRankingEntry) => r.rank <= 20);
+    // Always include AUS if not in top 20
+    if (selectedTeamRank && selectedTeamRank.rank > 20) {
+      return [...top20, selectedTeamRank];
+    }
+    return top20;
+  }, [rankings, selectedTeamRank]);
 
   // ══════════════════════════════════════════════════════════
   // Loading state
@@ -258,7 +242,7 @@ export default function FivbLive() {
             )}
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Match scores, tournament standings, world rankings, and player statistics from FIVB VIS
+            Match scores, tournament standings, world rankings, and player statistics from FIVB
           </p>
         </div>
         <div className="flex gap-3 flex-wrap items-center">
@@ -321,14 +305,14 @@ export default function FivbLive() {
           },
           {
             label: `${selectedGender === 'M' ? "Men's" : "Women's"} Rank`,
-            value: australiaRank ? `#${australiaRank.rank}` : '—',
+            value: selectedTeamRank ? `#${selectedTeamRank.rank}` : '—',
             unit: 'world',
             icon: BarChart3,
             color: 'text-primary',
           },
           {
             label: 'Ranking Points',
-            value: australiaRank ? String(australiaRank.points) : '—',
+            value: selectedTeamRank ? String(selectedTeamRank.points) : '—',
             unit: 'pts',
             icon: TrendingUp,
             color: 'text-teal',
@@ -364,9 +348,7 @@ export default function FivbLive() {
           <h2 className="text-sm font-semibold flex items-center gap-2">
             <Trophy className="w-4 h-4 text-primary" />
             Recent Match Scores
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-teal/15 text-teal border border-teal/30">
-              <Wifi className="w-3 h-3" /> LIVE
-            </span>
+            <DataSourceBadge source="FIVB VIS" />
           </h2>
           <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
             {lastRefresh && (
@@ -454,18 +436,23 @@ export default function FivbLive() {
       {/* ══════════════════════════════════════════════════ */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-        {/* Section D: World Rankings */}
+        {/* Section D: World Rankings (Real Data) */}
         <motion.div
           className="glass-card rounded-xl p-5"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
         >
-          <h2 className="text-sm font-semibold mb-4 flex items-center gap-2">
+          <h2 className="text-sm font-semibold mb-1 flex items-center gap-2">
             <BarChart3 className="w-4 h-4 text-primary" />
             FIVB World Rankings ({selectedGender === 'M' ? "Men's" : "Women's"})
-            {rankingsIsDemo && <DemoBadge />}
+            <DataSourceBadge source="LIVE" />
           </h2>
+          {rankingsLastUpdate && (
+            <p className="text-[10px] text-muted-foreground mb-4">
+              Last updated: {rankingsLastUpdate}
+            </p>
+          )}
 
           {/* Rankings bar chart */}
           {rankingsTop10.length > 0 && (
@@ -489,20 +476,24 @@ export default function FivbLive() {
                 <tr className="border-b border-border text-muted-foreground">
                   <th className="text-left py-2 px-2 w-10">#</th>
                   <th className="text-left py-2 px-2">Team</th>
+                  <th className="text-left py-2 px-2 hidden sm:table-cell">Conf.</th>
                   <th className="text-right py-2 px-2">Points</th>
                   <th className="text-center py-2 px-2 w-10">Trend</th>
                 </tr>
               </thead>
               <tbody>
-                {rankings.map((r: FivbRankingEntry) => (
+                {rankingsDisplay.map((r: FivbRankingEntry) => (
                   <tr
-                    key={r.rank}
+                    key={`${r.code}-${r.rank}`}
                     className={`border-b border-border/50 ${r.code === 'AUS' ? 'bg-primary/10 font-semibold' : ''}`}
                   >
                     <td className="py-1.5 px-2 text-muted-foreground">{r.rank}</td>
                     <td className="py-1.5 px-2">
                       <span className="text-[10px] text-muted-foreground mr-1">{r.code}</span>
                       {r.team}
+                    </td>
+                    <td className="py-1.5 px-2 text-muted-foreground text-[10px] hidden sm:table-cell">
+                      {r.confederation}
                     </td>
                     <td className="py-1.5 px-2 text-right font-mono">{r.points}</td>
                     <td className="py-1.5 px-2 text-center"><TrendIcon trend={r.trend} /></td>
@@ -520,90 +511,53 @@ export default function FivbLive() {
           )}
         </motion.div>
 
-        {/* Section C: Player Statistics */}
+        {/* Section C: Player Statistics (Real Data) */}
         <motion.div
           className="glass-card rounded-xl p-5"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.25 }}
         >
-          <h2 className="text-sm font-semibold mb-4 flex items-center gap-2">
+          <h2 className="text-sm font-semibold mb-1 flex items-center gap-2">
             <Users className="w-4 h-4 text-primary" />
-            Player Statistics ({selectedGender === 'M' ? "Men's" : "Women's"} — Australia)
-            {playersIsDemo && <DemoBadge />}
+            Top Scorers ({selectedGender === 'M' ? "Men's" : "Women's"})
+            <DataSourceBadge source="LIVE" />
           </h2>
+          {competition && (
+            <p className="text-[10px] text-muted-foreground mb-4">
+              Source: {competition}
+            </p>
+          )}
 
           {players.length > 0 ? (
             <>
-              {/* Player selector */}
-              <div className="mb-4">
-                <Select
-                  value={String(selectedPlayerIdx)}
-                  onValueChange={(v) => setSelectedPlayerIdx(parseInt(v, 10))}
-                >
-                  <SelectTrigger className="w-full bg-secondary border-border">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-card border-border">
-                    {players.map((p: FivbPlayer, i: number) => (
-                      <SelectItem key={i} value={String(i)}>
-                        #{p.number} {p.name} — {p.position}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Radar chart */}
-              {radarData.length > 0 && (
-                <div className="h-52 mb-4">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <RadarChart data={radarData}>
-                      <PolarGrid stroke="oklch(0.28 0.02 260)" />
-                      <PolarAngleAxis dataKey="stat" tick={{ fill: 'oklch(0.6 0.02 260)', fontSize: 10 }} />
-                      <PolarRadiusAxis tick={{ fill: 'oklch(0.4 0.02 260)', fontSize: 8 }} domain={[0, 100]} />
-                      <Radar
-                        name={selectedPlayer?.name || ''}
-                        dataKey="value"
-                        stroke="oklch(0.7 0.15 200)"
-                        fill="oklch(0.7 0.15 200)"
-                        fillOpacity={0.3}
-                      />
-                    </RadarChart>
-                  </ResponsiveContainer>
-                </div>
-              )}
-
               {/* Player stats table */}
-              <div className="max-h-[260px] overflow-y-auto">
+              <div className="max-h-[520px] overflow-y-auto">
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="border-b border-border text-muted-foreground">
-                      <th className="text-left py-2 px-2">#</th>
+                      <th className="text-left py-2 px-2 w-10">#</th>
                       <th className="text-left py-2 px-2">Player</th>
-                      <th className="text-left py-2 px-2">Pos</th>
+                      <th className="text-left py-2 px-2">Team</th>
                       <th className="text-right py-2 px-2">Pts</th>
-                      <th className="text-right py-2 px-2">Eff%</th>
-                      <th className="text-right py-2 px-2">Aces</th>
+                      <th className="text-right py-2 px-2">Atk</th>
                       <th className="text-right py-2 px-2">Blk</th>
-                      <th className="text-right py-2 px-2">Digs</th>
+                      <th className="text-right py-2 px-2">Srv</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {players.map((p: FivbPlayer, i: number) => (
+                    {players.slice(0, 30).map((p: FivbPlayer, i: number) => (
                       <tr
-                        key={i}
-                        className={`border-b border-border/50 cursor-pointer transition-colors ${i === selectedPlayerIdx ? 'bg-primary/10' : 'hover:bg-secondary/50'}`}
-                        onClick={() => setSelectedPlayerIdx(i)}
+                        key={`${p.name}-${p.team}-${i}`}
+                        className="border-b border-border/50 hover:bg-secondary/50 transition-colors"
                       >
-                        <td className="py-1.5 px-2 text-muted-foreground">{p.number}</td>
+                        <td className="py-1.5 px-2 text-muted-foreground">{p.rank}</td>
                         <td className="py-1.5 px-2 font-medium">{p.name}</td>
-                        <td className="py-1.5 px-2 text-muted-foreground text-[10px]">{p.position}</td>
-                        <td className="py-1.5 px-2 text-right font-mono">{p.stats.pointsScored}</td>
-                        <td className="py-1.5 px-2 text-right font-mono">{(p.stats.attackEfficiency * 100).toFixed(0)}%</td>
-                        <td className="py-1.5 px-2 text-right font-mono">{p.stats.serveAces}</td>
-                        <td className="py-1.5 px-2 text-right font-mono">{p.stats.blocks}</td>
-                        <td className="py-1.5 px-2 text-right font-mono">{p.stats.digs}</td>
+                        <td className="py-1.5 px-2 text-muted-foreground">{p.team}</td>
+                        <td className="py-1.5 px-2 text-right font-mono font-semibold">{p.points}</td>
+                        <td className="py-1.5 px-2 text-right font-mono">{p.attackPoints}</td>
+                        <td className="py-1.5 px-2 text-right font-mono">{p.blockPoints}</td>
+                        <td className="py-1.5 px-2 text-right font-mono">{p.servePoints}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -615,6 +569,7 @@ export default function FivbLive() {
               <div className="text-center py-8 text-muted-foreground">
                 <Users className="w-10 h-10 mx-auto mb-3 opacity-30" />
                 <p className="text-sm">No player statistics available</p>
+                <p className="text-xs mt-1">Player data may be temporarily unavailable</p>
               </div>
             )
           )}
@@ -622,7 +577,7 @@ export default function FivbLive() {
       </div>
 
       {/* ══════════════════════════════════════════════════ */}
-      {/* Section: Player Performance Comparison Chart      */}
+      {/* Section: Top Scorers Comparison Chart             */}
       {/* ══════════════════════════════════════════════════ */}
       {playerChartData.length > 0 && (
         <motion.div
@@ -633,21 +588,20 @@ export default function FivbLive() {
         >
           <h2 className="text-sm font-semibold mb-4 flex items-center gap-2">
             <BarChart3 className="w-4 h-4 text-primary" />
-            Player Performance Comparison
-            {playersIsDemo && <DemoBadge />}
+            Top Scorers — Points Breakdown
+            <DataSourceBadge source="LIVE" />
           </h2>
-          <div className="h-64">
+          <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={playerChartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.28 0.02 260)" />
-                <XAxis dataKey="name" tick={{ fill: 'oklch(0.6 0.02 260)', fontSize: 10 }} />
+                <XAxis dataKey="name" tick={{ fill: 'oklch(0.6 0.02 260)', fontSize: 9 }} angle={-45} textAnchor="end" height={60} />
                 <YAxis tick={{ fill: 'oklch(0.6 0.02 260)', fontSize: 10 }} />
                 <Tooltip contentStyle={tooltipStyle} />
                 <Legend wrapperStyle={{ fontSize: 10 }} />
-                <Bar dataKey="points" name="Points" fill="oklch(0.7 0.15 200)" radius={[3, 3, 0, 0]} />
-                <Bar dataKey="aces" name="Aces" fill="oklch(0.82 0.14 85)" radius={[3, 3, 0, 0]} />
-                <Bar dataKey="blocks" name="Blocks" fill="oklch(0.7 0.18 150)" radius={[3, 3, 0, 0]} />
-                <Bar dataKey="digs" name="Digs" fill="oklch(0.75 0.12 30)" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="attack" name="Attack Pts" fill="oklch(0.7 0.15 200)" stackId="a" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="block" name="Block Pts" fill="oklch(0.82 0.14 85)" stackId="a" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="serve" name="Serve Pts" fill="oklch(0.7 0.18 150)" stackId="a" radius={[3, 3, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -666,9 +620,7 @@ export default function FivbLive() {
         <h2 className="text-sm font-semibold mb-4 flex items-center gap-2">
           <Trophy className="w-4 h-4 text-primary" />
           Tournament Overview
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-teal/15 text-teal border border-teal/30">
-            <Wifi className="w-3 h-3" /> LIVE
-          </span>
+          <DataSourceBadge source="FIVB VIS" />
         </h2>
 
         {tournaments.length === 0 && !tournamentsLoading ? (
@@ -724,8 +676,9 @@ export default function FivbLive() {
 
       {/* ── Footer info ─────────────────────────────────── */}
       <div className="text-[10px] text-muted-foreground/50 text-center pt-2">
-        Data sourced from FIVB Volleyball Information System (VIS). Match and tournament data is live from the FIVB VIS API.
-        Rankings and player statistics are demo data — real-time data requires FIVB partner API credentials.
+        Data sourced from FIVB Volleyball Information System (VIS) and Volleyball World.
+        Match and tournament data from FIVB VIS API. World rankings from Volleyball World API.
+        Player statistics from Volleyball World competition pages.
         Match data auto-refreshes every 30 seconds.
       </div>
     </div>
